@@ -1,0 +1,8 @@
+# Arquivos de cache do Python
+__pycache__/
+*.pyc
+
+# Arquivo do banco de dados SQLite e seus arquivos temporários
+# É uma má prática versionar o banco de dados com os dados dos usuários.
+*.db
+*.db-journal*
