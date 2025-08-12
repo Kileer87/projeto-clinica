@@ -1,85 +1,134 @@
 import tkinter as tk
 from tkinter import messagebox, ttk
-from datetime import date
+from datetime import date, datetime
+import sqlite3
 import database  # Importa nosso módulo de banco de dados
+
+# --- Funções Auxiliares ---
+
+def formatar_data_para_db(data_str):
+    """Converte data de DD/MM/YYYY para YYYY-MM-DD para salvar no DB."""
+    if not data_str:
+        return None
+    try:
+        # Converte para o formato do banco de dados, que permite ordenação correta
+        return datetime.strptime(data_str, '%d/%m/%Y').strftime('%Y-%m-%d')
+    except ValueError:
+        return None # Retorna None se o formato da data for inválido
+
+def formatar_data_para_exibicao(data_str):
+    """Converte data de YYYY-MM-DD para DD/MM/YYYY para exibir na UI."""
+    if not data_str:
+        return ""
+    try:
+        # Converte de volta para o formato amigável para o usuário
+        return datetime.strptime(data_str, '%Y-%m-%d').strftime('%d/%m/%Y')
+    except ValueError:
+        return data_str # Se já estiver em outro formato, retorna o original
+
+def calcular_idade(data_nasc_db):
+    """Calcula a idade a partir da data de nascimento no formato YYYY-MM-DD."""
+    if not data_nasc_db:
+        return ""
+    try:
+        nascimento = datetime.strptime(data_nasc_db, '%Y-%m-%d').date()
+        hoje = date.today()
+        # Calcula a idade de forma precisa
+        idade = hoje.year - nascimento.year - ((hoje.month, hoje.day) < (nascimento.month, nascimento.day))
+        return idade
+    except (ValueError, TypeError):
+        return "" # Retorna vazio se a data for inválida
 
 def salvar_paciente(janela_cadastro, entry_nome, entry_data, entry_resp):
     """Coleta os dados dos campos de entrada e salva no banco de dados."""
-    nome = entry_nome.get()
-    data_nasc = entry_data.get()
-    responsavel = entry_resp.get()
+    nome = entry_nome.get().strip()
+    data_nasc_str = entry_data.get().strip()
+    responsavel = entry_resp.get().strip()
 
-    if not nome or not data_nasc or not responsavel:
+    if not nome or not data_nasc_str or not responsavel:
         messagebox.showerror("Erro de Validação", "Todos os campos são obrigatórios!", parent=janela_cadastro)
         return
 
+    data_nasc_db = formatar_data_para_db(data_nasc_str)
+    if not data_nasc_db:
+        messagebox.showerror("Erro de Validação", "Formato de data inválido. Use DD/MM/AAAA.", parent=janela_cadastro)
+        return
+
     try:
-        database.adicionar_paciente(nome, data_nasc, responsavel)
+        database.adicionar_paciente(nome, data_nasc_db, responsavel)
         messagebox.showinfo("Sucesso", f"Paciente {nome} cadastrado com sucesso!", parent=janela_cadastro)
         janela_cadastro.destroy()
-    except Exception as e:
+    except sqlite3.Error as e:
         messagebox.showerror("Erro de Banco de Dados", f"Ocorreu um erro ao salvar: {e}", parent=janela_cadastro)
 
 def salvar_alteracoes_paciente(janela_edicao, entry_nome, entry_data, entry_resp, paciente_id):
     """Salva as alterações de um paciente existente."""
-    nome = entry_nome.get()
-    data_nasc = entry_data.get()
-    responsavel = entry_resp.get()
+    nome = entry_nome.get().strip()
+    data_nasc_str = entry_data.get().strip()
+    responsavel = entry_resp.get().strip()
 
-    if not nome or not data_nasc or not responsavel:
+    if not nome or not data_nasc_str or not responsavel:
         messagebox.showerror("Erro de Validação", "Todos os campos são obrigatórios!", parent=janela_edicao)
         return
 
+    data_nasc_db = formatar_data_para_db(data_nasc_str)
+    if not data_nasc_db:
+        messagebox.showerror("Erro de Validação", "Formato de data inválido. Use DD/MM/AAAA.", parent=janela_edicao)
+        return
+
     try:
-        database.atualizar_paciente(paciente_id, nome, data_nasc, responsavel)
+        database.atualizar_paciente(paciente_id, nome, data_nasc_db, responsavel)
         messagebox.showinfo("Sucesso", "Dados do paciente atualizados com sucesso!", parent=janela_edicao)
         janela_edicao.destroy()
-    except Exception as e:
+    except sqlite3.Error as e:
         messagebox.showerror("Erro de Banco de Dados", f"Ocorreu um erro ao atualizar: {e}", parent=janela_edicao)
 
 def salvar_nova_sessao(janela_form, paciente_id, widgets):
     """Salva uma nova sessão no banco de dados."""
     try:
-        data_sessao = widgets['data'].get()
-        resumo = widgets['resumo'].get("1.0", "end-1c")
-        foco = widgets['foco'].get("1.0", "end-1c")
+        data_sessao_str = widgets['data'].get().strip()
+        resumo = widgets['resumo'].get("1.0", "end-1c").strip()
         evolucao = widgets['evolucao'].get()
-        seg = widgets['seg'].get()
-        ter = widgets['ter'].get()
-        qua = widgets['qua'].get()
-        qui = widgets['qui'].get()
-        sex = widgets['sex'].get()
+        obs_evolucao = widgets['obs_evolucao'].get("1.0", "end-1c").strip()
+        plano = widgets['plano'].get("1.0", "end-1c").strip()
 
-        if not data_sessao:
+        if not data_sessao_str:
             messagebox.showerror("Erro de Validação", "O campo 'Data da Sessão' é obrigatório.", parent=janela_form)
             return
 
-        database.adicionar_sessao(paciente_id, data_sessao, resumo, foco, evolucao, seg, ter, qua, qui, sex)
+        data_sessao_db = formatar_data_para_db(data_sessao_str)
+        if not data_sessao_db:
+            messagebox.showerror("Erro de Validação", "Formato de data inválido. Use DD/MM/AAAA.", parent=janela_form)
+            return
+
+        database.adicionar_sessao(paciente_id, data_sessao_db, resumo, evolucao, obs_evolucao, plano)
         messagebox.showinfo("Sucesso", "Nova sessão registrada com sucesso!", parent=janela_form)
         janela_form.destroy()
-    except Exception as e:
+    except sqlite3.Error as e:
         messagebox.showerror("Erro de Banco de Dados", f"Ocorreu um erro ao salvar a sessão: {e}", parent=janela_form)
 
 def salvar_alteracoes_sessao(janela_form, sessao_id, widgets):
     """Salva as alterações de uma sessão existente."""
-    data_sessao = widgets['data'].get()
-    resumo = widgets['resumo'].get("1.0", "end-1c")
-    foco = widgets['foco'].get("1.0", "end-1c")
-    evolucao = widgets['evolucao'].get()
-    seg = widgets['seg'].get()
-    ter = widgets['ter'].get()
-    qua = widgets['qua'].get()
-    qui = widgets['qui'].get()
-    sex = widgets['sex'].get()
-
-    if not data_sessao:
-        messagebox.showerror("Erro de Validação", "O campo 'Data da Sessão' é obrigatório.", parent=janela_form)
-        return
     try:
-        database.atualizar_sessao(sessao_id, data_sessao, resumo, foco, evolucao, seg, ter, qua, qui, sex)
+        data_sessao_str = widgets['data'].get().strip()
+        resumo = widgets['resumo'].get("1.0", "end-1c").strip()
+        evolucao = widgets['evolucao'].get()
+        obs_evolucao = widgets['obs_evolucao'].get("1.0", "end-1c").strip()
+        plano = widgets['plano'].get("1.0", "end-1c").strip()
+
+        if not data_sessao_str:
+            messagebox.showerror("Erro de Validação", "O campo 'Data da Sessão' é obrigatório.", parent=janela_form)
+            return
+
+        data_sessao_db = formatar_data_para_db(data_sessao_str)
+        if not data_sessao_db:
+            messagebox.showerror("Erro de Validação", "Formato de data inválido. Use DD/MM/AAAA.", parent=janela_form)
+            return
+
+        database.atualizar_sessao(sessao_id, data_sessao_db, resumo, evolucao, obs_evolucao, plano)
         messagebox.showinfo("Sucesso", "Sessão atualizada com sucesso!", parent=janela_form)
         janela_form.destroy()
-    except Exception as e:
+    except sqlite3.Error as e:
         messagebox.showerror("Erro de Banco de Dados", f"Ocorreu um erro ao salvar a sessão: {e}", parent=janela_form)
 
 
@@ -101,14 +150,16 @@ def abrir_janela_cadastro(janela_principal):
     tk.Label(frame, text="Nome Completo:").grid(row=0, column=0, sticky="w", pady=5)
     entry_nome = tk.Entry(frame, width=40)
     entry_nome.grid(row=0, column=1, pady=5)
+    entry_nome.focus_set() # Foco automático no primeiro campo
 
-    tk.Label(frame, text="Data de Nascimento:").grid(row=1, column=0, sticky="w", pady=5)
+    tk.Label(frame, text="Data de Nascimento\n(DD/MM/AAAA):").grid(row=1, column=0, sticky="w", pady=5)
     entry_data = tk.Entry(frame, width=40)
     entry_data.grid(row=1, column=1, pady=5)
 
     tk.Label(frame, text="Nome do Responsável:").grid(row=2, column=0, sticky="w", pady=5)
     entry_resp = tk.Entry(frame, width=40)
     entry_resp.grid(row=2, column=1, pady=5)
+
 
     btn_salvar = tk.Button(
         frame,
@@ -138,17 +189,18 @@ def abrir_janela_edicao(janela_pai, paciente_id, callback_atualizar):
     tk.Label(frame, text="Nome Completo:").grid(row=0, column=0, sticky="w", pady=5)
     entry_nome = tk.Entry(frame, width=40)
     entry_nome.grid(row=0, column=1, pady=5)
-    entry_nome.insert(0, paciente_data[1])  # nome_completo
+    entry_nome.insert(0, paciente_data['nome_completo'])
+    entry_nome.focus_set() # Foco automático
 
-    tk.Label(frame, text="Data de Nascimento:").grid(row=1, column=0, sticky="w", pady=5)
+    tk.Label(frame, text="Data de Nascimento\n(DD/MM/AAAA):").grid(row=1, column=0, sticky="w", pady=5)
     entry_data = tk.Entry(frame, width=40)
     entry_data.grid(row=1, column=1, pady=5)
-    entry_data.insert(0, paciente_data[2])  # data_nascimento
+    entry_data.insert(0, formatar_data_para_exibicao(paciente_data['data_nascimento']))
 
     tk.Label(frame, text="Nome do Responsável:").grid(row=2, column=0, sticky="w", pady=5)
     entry_resp = tk.Entry(frame, width=40)
     entry_resp.grid(row=2, column=1, pady=5)
-    entry_resp.insert(0, paciente_data[3])  # nome_responsavel
+    entry_resp.insert(0, paciente_data['nome_responsavel'])
 
     # Botão Salvar
     btn_salvar = tk.Button(
@@ -167,46 +219,37 @@ def criar_abas_sessao(frame_pai):
     notebook = ttk.Notebook(frame_pai)
     notebook.pack(expand=True, fill='both', pady=5)
 
-    # Aba 1: Resumo e Foco
+    # Aba 1: Avaliação da Sessão
     aba1 = ttk.Frame(notebook, padding=10)
-    notebook.add(aba1, text=' Resumo e Foco ')
+    notebook.add(aba1, text=' Avaliação da Sessão ')
 
-    # Aba 2: Plano Semanal e Evolução
+    # Aba 2: Plano Terapêutico
     aba2 = ttk.Frame(notebook, padding=10)
-    notebook.add(aba2, text=' Plano Semanal e Evolução ')
+    notebook.add(aba2, text=' Plano Terapêutico ')
 
     # --- Widgets da Aba 1 ---
-    ttk.Label(aba1, text="Resumo da Sessão:").pack(anchor='w')
-    text_resumo = tk.Text(aba1, width=50, height=10, wrap='word')
-    text_resumo.pack(expand=True, fill='both', pady=(0, 10))
-
-    ttk.Label(aba1, text="Foco para Próxima Sessão:").pack(anchor='w')
-    text_foco = tk.Text(aba1, width=50, height=6, wrap='word')
-    text_foco.pack(expand=True, fill='both')
-
-    # --- Widgets da Aba 2 ---
-    frame_evolucao = ttk.Frame(aba2)
-    frame_evolucao.pack(fill='x', pady=(0, 15))
+    frame_evolucao = ttk.Frame(aba1)
+    frame_evolucao.pack(fill='x', pady=(0, 10))
     ttk.Label(frame_evolucao, text="Nível de Evolução:").pack(side='left')
     combo_evolucao = ttk.Combobox(frame_evolucao, values=["Iniciante", "Intermediário", "Avançado", "Manutenção"])
     combo_evolucao.pack(side='left', padx=5)
 
-    frame_plano = ttk.LabelFrame(aba2, text="Plano de Terapias Semanais", padding=10)
-    frame_plano.pack(fill='both', expand=True)
+    ttk.Label(aba1, text="Resumo da Sessão (o que foi trabalhado):").pack(anchor='w', pady=(5,0))
+    text_resumo = tk.Text(aba1, width=50, height=8, wrap='word')
+    text_resumo.pack(expand=True, fill='both', pady=(0, 10))
 
-    dias = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira"]
-    entradas_dias = {}
-    for i, dia in enumerate(dias):
-        ttk.Label(frame_plano, text=f"{dia}:").grid(row=i, column=0, sticky='w', pady=2)
-        entry = ttk.Entry(frame_plano, width=40)
-        entry.grid(row=i, column=1, sticky='ew', padx=5)
-        entradas_dias[dia[:3].lower()] = entry
-    frame_plano.columnconfigure(1, weight=1)
+    ttk.Label(aba1, text="Observações sobre a Evolução do Paciente:").pack(anchor='w')
+    text_obs_evolucao = tk.Text(aba1, width=50, height=8, wrap='word')
+    text_obs_evolucao.pack(expand=True, fill='both')
+
+    # --- Widgets da Aba 2 ---
+    ttk.Label(aba2, text="Plano Terapêutico (atividades, metas e estratégias para as próximas sessões):").pack(anchor='w')
+    text_plano = tk.Text(aba2, width=50, height=15, wrap='word')
+    text_plano.pack(expand=True, fill='both', pady=5)
 
     return {
-        "resumo": text_resumo, "foco": text_foco, "evolucao": combo_evolucao,
-        "seg": entradas_dias['seg'], "ter": entradas_dias['ter'], "qua": entradas_dias['qua'],
-        "qui": entradas_dias['qui'], "sex": entradas_dias['sex']
+        "resumo": text_resumo, "evolucao": combo_evolucao, 
+        "obs_evolucao": text_obs_evolucao, "plano": text_plano
     }
 
 def abrir_janela_detalhes_sessao(janela_pai, sessao_id):
@@ -217,7 +260,8 @@ def abrir_janela_detalhes_sessao(janela_pai, sessao_id):
         return
     
     janela_detalhes = tk.Toplevel(janela_pai)
-    janela_detalhes.title(f"Detalhes da Sessão - {sessao_data[0]}")
+    data_exibicao = formatar_data_para_exibicao(sessao_data['data_sessao'])
+    janela_detalhes.title(f"Detalhes da Sessão - {data_exibicao if data_exibicao else 'Data Inválida'}")
     janela_detalhes.geometry("600x500")
     janela_detalhes.resizable(False, False)
     janela_detalhes.transient(janela_pai)
@@ -229,14 +273,10 @@ def abrir_janela_detalhes_sessao(janela_pai, sessao_id):
     widgets = criar_abas_sessao(frame)
     
     # Preenche os dados e desabilita a edição
-    widgets['resumo'].insert('1.0', sessao_data[1] or "")
-    widgets['foco'].insert('1.0', sessao_data[2] or "")
-    widgets['evolucao'].set(sessao_data[3] or "")
-    widgets['seg'].insert(0, sessao_data[4] or "")
-    widgets['ter'].insert(0, sessao_data[5] or "")
-    widgets['qua'].insert(0, sessao_data[6] or "")
-    widgets['qui'].insert(0, sessao_data[7] or "")
-    widgets['sex'].insert(0, sessao_data[8] or "")
+    widgets['resumo'].insert('1.0', sessao_data['resumo_sessao'] or "")
+    widgets['evolucao'].set(sessao_data['nivel_evolucao'] or "")
+    widgets['obs_evolucao'].insert('1.0', sessao_data['observacoes_evolucao'] or "")
+    widgets['plano'].insert('1.0', sessao_data['plano_terapeutico'] or "")
 
     for w in widgets.values():
         if isinstance(w, (tk.Text, ttk.Entry, ttk.Combobox)):
@@ -282,12 +322,13 @@ def abrir_janela_sessoes(janela_pai, paciente_id, paciente_nome):
             tree.delete(i)
         try:
             for sessao in database.listar_sessoes_por_paciente(paciente_id):
-                # sessao = (id, data, evolucao, resumo)
+                # sessao = {'id': ..., 'data_sessao': ..., 'nivel_evolucao': ..., 'resumo_sessao': ...}
                 # Limita o resumo para exibição na tabela e remove quebras de linha
-                resumo_original = sessao[3] if sessao[3] else ""
+                data_exibicao = formatar_data_para_exibicao(sessao['data_sessao'])
+                resumo_original = sessao['resumo_sessao'] or ""
                 resumo_curto = (resumo_original[:75] + '...') if len(resumo_original) > 75 else resumo_original
-                tree.insert("", "end", values=(sessao[0], sessao[1], sessao[2], resumo_curto.replace('\n', ' ')))
-        except Exception as e:
+                tree.insert("", "end", values=(sessao['id'], data_exibicao, sessao['nivel_evolucao'], resumo_curto.replace('\n', ' ')))
+        except sqlite3.Error as e:
             messagebox.showerror("Erro", f"Erro ao carregar sessões: {e}", parent=janela_sessoes)
 
     def ao_clicar_duas_vezes(event):
@@ -306,7 +347,7 @@ def abrir_janela_sessoes(janela_pai, paciente_id, paciente_nome):
     btn_adicionar = ttk.Button(
         botoes_frame, 
         text="Adicionar Nova Sessão", 
-        command=lambda: abrir_janela_nova_sessao(janela_sessoes, paciente_id, recarregar_sessoes)
+        command=lambda: abrir_janela_form_sessao(janela_sessoes, recarregar_sessoes, paciente_id=paciente_id)
     )
     btn_adicionar.pack(side='left', padx=5)
     
@@ -331,7 +372,7 @@ def abrir_janela_sessoes(janela_pai, paciente_id, paciente_nome):
                 database.excluir_sessao(sessao_id)
                 messagebox.showinfo("Sucesso", "Sessão excluída com sucesso.", parent=janela_sessoes)
                 recarregar_sessoes()
-            except Exception as e:
+            except sqlite3.Error as e:
                 messagebox.showerror("Erro", f"Erro ao excluir sessão: {e}", parent=janela_sessoes)
 
     ttk.Button(botoes_frame, text="Editar Sessão", command=editar_sessao_selecionada).pack(side='left', padx=5)
@@ -340,7 +381,7 @@ def abrir_janela_sessoes(janela_pai, paciente_id, paciente_nome):
     # Carrega os dados iniciais
     recarregar_sessoes()
 
-def abrir_janela_nova_sessao(janela_pai, paciente_id, callback_atualizar, sessao_id=None):
+def abrir_janela_form_sessao(janela_pai, callback_atualizar, paciente_id=None, sessao_id=None):
     """Abre um formulário para adicionar uma nova sessão."""
     janela_form = tk.Toplevel(janela_pai)
     janela_form.title("Registrar Nova Sessão" if not sessao_id else "Editar Sessão")
@@ -354,24 +395,21 @@ def abrir_janela_nova_sessao(janela_pai, paciente_id, callback_atualizar, sessao
     
     frame_data = ttk.Frame(frame)
     frame_data.pack(fill='x')
-    ttk.Label(frame_data, text="Data da Sessão:").pack(side='left')
+    ttk.Label(frame_data, text="Data da Sessão\n(DD/MM/AAAA):").pack(side='left')
     entry_data = ttk.Entry(frame_data, width=20)
     entry_data.pack(side='left', padx=5)
+    entry_data.focus_set()
     
     widgets = criar_abas_sessao(frame)
     widgets['data'] = entry_data # Adiciona a entrada de data ao dicionário
 
     if sessao_id: # Modo de edição
         sessao_data = database.buscar_sessao_por_id(sessao_id)
-        entry_data.insert(0, sessao_data[0])
-        widgets['resumo'].insert('1.0', sessao_data[1] or "")
-        widgets['foco'].insert('1.0', sessao_data[2] or "")
-        widgets['evolucao'].set(sessao_data[3] or "")
-        widgets['seg'].insert(0, sessao_data[4] or "")
-        widgets['ter'].insert(0, sessao_data[5] or "")
-        widgets['qua'].insert(0, sessao_data[6] or "")
-        widgets['qui'].insert(0, sessao_data[7] or "")
-        widgets['sex'].insert(0, sessao_data[8] or "")
+        entry_data.insert(0, formatar_data_para_exibicao(sessao_data['data_sessao']))
+        widgets['resumo'].insert('1.0', sessao_data['resumo_sessao'] or "")
+        widgets['evolucao'].set(sessao_data['nivel_evolucao'] or "")
+        widgets['obs_evolucao'].insert('1.0', sessao_data['observacoes_evolucao'] or "")
+        widgets['plano'].insert('1.0', sessao_data['plano_terapeutico'] or "")
     else: # Modo de criação
         entry_data.insert(0, date.today().strftime('%d/%m/%Y'))
 
@@ -391,13 +429,16 @@ def abrir_janela_nova_sessao(janela_pai, paciente_id, callback_atualizar, sessao
 
 def abrir_janela_edicao_sessao(janela_pai, sessao_id, callback_atualizar):
     """Abre o formulário de sessão no modo de edição."""
-    abrir_janela_nova_sessao(janela_pai, paciente_id=None, callback_atualizar=callback_atualizar, sessao_id=sessao_id)
+    # Para editar, não precisamos do paciente_id inicialmente, pois já temos o sessao_id.
+    # A função de salvar alterações usará o sessao_id.
+    abrir_janela_form_sessao(janela_pai, callback_atualizar=callback_atualizar, sessao_id=sessao_id)
 
 def abrir_janela_lista(janela_principal):
     """Abre uma janela para listar todos os pacientes."""
     janela_lista = tk.Toplevel(janela_principal)
     janela_lista.title("Lista de Pacientes Cadastrados")
-    janela_lista.geometry("800x450")
+    # Aumenta a largura para a nova coluna 'Idade'
+    janela_lista.geometry("900x450")
     janela_lista.transient(janela_principal)
     janela_lista.grab_set()
 
@@ -424,18 +465,20 @@ def abrir_janela_lista(janela_principal):
     # --- Tabela (Treeview) ---
     tree_frame = ttk.Frame(frame)
     tree_frame.pack(expand=True, fill='both')
-    cols = ('ID', 'Nome Completo', 'Data de Nascimento', 'Responsável') # Colunas visíveis
+    cols = ('ID', 'Nome Completo', 'Idade', 'Data de Nascimento', 'Responsável') # Colunas visíveis
     tree = ttk.Treeview(tree_frame, columns=cols, show='headings', height=15)
 
     # Configura os cabeçalhos e larguras das colunas
     tree.heading('ID', text='ID')
     tree.column('ID', width=50, anchor='center')
     tree.heading('Nome Completo', text='Nome Completo')
-    tree.column('Nome Completo', width=300)
+    tree.column('Nome Completo', width=280)
+    tree.heading('Idade', text='Idade')
+    tree.column('Idade', width=60, anchor='center')
     tree.heading('Data de Nascimento', text='Data de Nascimento')
     tree.column('Data de Nascimento', width=150, anchor='center')
     tree.heading('Responsável', text='Responsável')
-    tree.column('Responsável', width=250)
+    tree.column('Responsável', width=280)
 
     tree.grid(row=0, column=0, sticky='nsew')
 
@@ -461,8 +504,13 @@ def abrir_janela_lista(janela_principal):
                 pacientes = database.listar_pacientes()
 
             for paciente in pacientes:
-                tree.insert("", "end", values=paciente)
-        except Exception as e:
+                idade = calcular_idade(paciente['data_nascimento'])
+                data_nasc_exibicao = formatar_data_para_exibicao(paciente['data_nascimento'])
+                # Monta a tupla na ordem correta das colunas da Treeview
+                valores_para_inserir = (paciente['id'], paciente['nome_completo'], idade, data_nasc_exibicao, paciente['nome_responsavel'])
+                tree.insert("", "end", values=valores_para_inserir)
+
+        except sqlite3.Error as e:
             messagebox.showerror("Erro de Banco de Dados", f"Ocorreu um erro ao buscar pacientes: {e}", parent=janela_lista)
 
     def editar_selecionado():
@@ -505,7 +553,7 @@ def abrir_janela_lista(janela_principal):
                 database.excluir_paciente(paciente_id)
                 messagebox.showinfo("Sucesso", "Paciente excluído com sucesso.", parent=janela_lista)
                 recarregar_lista() # Atualiza a lista após a exclusão
-            except Exception as e:
+            except sqlite3.Error as e:
                 messagebox.showerror("Erro de Banco de Dados", f"Ocorreu um erro ao excluir: {e}", parent=janela_lista)
 
     def limpar_busca():
@@ -529,8 +577,8 @@ def abrir_janela_lista(janela_principal):
 
 def main():
     """Função principal que cria a interface e inicia o loop do aplicativo."""
-    database.criar_tabela_pacientes()
-    database.criar_tabela_sessoes()
+    # Inicializa o banco de dados, criando e/ou atualizando as tabelas necessárias.
+    database.inicializar_banco_de_dados()
 
     root = tk.Tk()
     root.title("Sistema de Clínica - Início")
